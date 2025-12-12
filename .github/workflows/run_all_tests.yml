@@ -1,5 +1,4 @@
 name: Phase 2 Test Runner
-
 on:
   push:
     branches: [ main ]
@@ -8,7 +7,6 @@ on:
 jobs:
   phase2:
     runs-on: ubuntu-latest
-
     permissions:
       contents: write
 
@@ -21,19 +19,25 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y python3 python3-pip tcpdump tshark iproute2
 
-      - name: Install Python dependencies (if any)
+      - name: Install Python dependencies
         run: |
-         python3 -m pip install --upgrade pip setuptools wheel
-         sudo python3 -m pip install pandas  numpy
+          python3 -m pip install --upgrade pip setuptools wheel
+          sudo python3 -m pip install pandas numpy matplotlib
 
       - name: Make runner executable
-        run: |
-          chmod +x run_all_tests.sh
+        run: chmod +x run_all_tests.sh
 
-      - name: Run Phase 2 tests (needs sudo for tc/tcpdump)
+      - name: Run Phase 2 tests
+        run: sudo ./run_all_tests.sh
+
+      - name: Generate plots
         run: |
-          sudo ./run_all_tests.sh
-    
+          for scenario in results_phase2/*; do
+            if [[ -d "$scenario" && -f "$scenario/metrics.csv" ]]; then
+              python3 plot_metrics.py --metrics "$scenario/metrics.csv" --outdir "$scenario"
+            fi
+          done
+
       - name: Upload results artifact
         uses: actions/upload-artifact@v4
         with:
