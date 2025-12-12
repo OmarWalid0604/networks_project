@@ -87,7 +87,7 @@ def main(client_name="player1"):
         pos_f = open(pos_fname, "w", newline="")
         pos_w = csv.writer(pos_f)
         # header includes lost_snapshots_total
-        pos_w.writerow(["timestamp_ms", "snapshot_id", "seq_num", "player_id", "displayed_x", "displayed_y", "lost_snapshots_total","lost_snapshots_total"])
+        pos_w.writerow(["timestamp_ms", "snapshot_id", "seq_num", "player_id", "displayed_x", "displayed_y","lost_snapshots_total"])
         pos_f.flush()
 
     # Event RDT placeholders (unchanged behavior)
