@@ -1,112 +1,88 @@
 #!/usr/bin/env python3
-"""
-compute_metrics.py
-This version adds:
- - update_rate (snapshots/sec)
- - loss_rate (% lost snapshots)
- - scenario-level statistics summary
-
-Outputs:
-   metrics.csv     -> per-snapshot rows
-   statistics.csv  -> one row containing scenario summary
-"""
-
 import argparse
 import os
 import numpy as np
 import pandas as pd
 
+TICK_HZ = 20.0
 
 def interp_server_metrics(serv_metrics, query_ts):
-    """Linear interpolation of cpu_percent and bandwidth_kbps."""
     if serv_metrics.empty:
         return (
             np.full_like(query_ts, np.nan, dtype=float),
             np.full_like(query_ts, np.nan, dtype=float),
         )
-
     serv_metrics = serv_metrics.sort_values("timestamp_ms")
     times = serv_metrics["timestamp_ms"].to_numpy(dtype=float)
     cpu = serv_metrics["cpu_percent"].to_numpy(dtype=float)
     bw = serv_metrics["bandwidth_kbps"].to_numpy(dtype=float)
-
     cpu_interp = np.interp(query_ts, times, cpu, left=cpu[0], right=cpu[-1])
     bw_interp = np.interp(query_ts, times, bw, left=bw[0], right=bw[-1])
-
     return cpu_interp, bw_interp
 
-
 def compute_rfc1889_jitter(group):
-    """RFC1889 jitter implementation."""
     R = group["recv_time_ms"].to_numpy(dtype=float)
     S = group["server_timestamp_ms"].to_numpy(dtype=float)
-
     n = len(R)
     if n == 0:
         return np.array([], dtype=float)
-
     J = 0.0
     out = np.full(n, np.nan, dtype=float)
-
     for i in range(1, n):
         D = abs((R[i] - R[i - 1]) - (S[i] - S[i - 1]))
         J = J + (D - J) / 16.0
         out[i] = J
-
     return out
-
 
 def main():
     p = argparse.ArgumentParser()
     p.add_argument("--server", required=True)
-    p.add_argument("--clients", required=True)
+    p.add_argument("--clients", required=True)   # combined clients file (concatenated per-client CSVs)
     p.add_argument("--server_metrics", required=True)
     p.add_argument("--out", required=True)
     args = p.parse_args()
 
-    # Load CSVs
     server = pd.read_csv(args.server)
     clients = pd.read_csv(args.clients)
     serv_metrics = pd.read_csv(args.server_metrics)
 
-    # Check headers
-    expected_server_cols = {"timestamp_ms", "snapshot_id", "player_id", "x", "y"}
-    expected_client_cols = {
-        "timestamp_ms",
-        "snapshot_id",
-        "seq_num",
-        "player_id",
-        "displayed_x",
-        "displayed_y",
-    }
-    expected_servmet_cols = {"timestamp_ms", "cpu_percent", "bandwidth_kbps"}
+    # normalize column names
+    server = server.rename(columns={"timestamp_ms": "server_timestamp_ms", "x": "server_x", "y": "server_y"})
+    clients = clients.rename(columns={"timestamp_ms": "recv_time_ms", "displayed_x": "client_x", "displayed_y": "client_y"})
 
-    if not expected_server_cols.issubset(server.columns):
-        raise SystemExit("server.csv missing required columns")
-    if not expected_client_cols.issubset(clients.columns):
-        raise SystemExit("client.csv missing required columns")
-    if not expected_servmet_cols.issubset(serv_metrics.columns):
-        raise SystemExit("server_metrics.csv missing required columns")
+    # quick checks
+    required_client_cols = {"recv_time_ms", "snapshot_id", "seq_num", "player_id", "client_x", "client_y", "lost_snapshots_total"}
+    if not required_client_cols.issubset(set(clients.columns)):
+        raise SystemExit(f"clients CSV missing required columns: {required_client_cols - set(clients.columns)}")
 
-    # Rename columns
-    server = server.rename(
-        columns={"timestamp_ms": "server_timestamp_ms", "x": "server_x", "y": "server_y"}
-    )
-    clients = clients.rename(
-        columns={
-            "timestamp_ms": "recv_time_ms",
-            "displayed_x": "client_x",
-            "displayed_y": "client_y",
-        }
-    )
+    # Per-client stats: compute received, lost, expected (per-client window), update_rate
+    per_client_rows = []
+    for cid, grp in clients.groupby("player_id"):
+        rec_snaps = int(grp["snapshot_id"].nunique())
+        lost_reported = int(grp["lost_snapshots_total"].max()) if "lost_snapshots_total" in grp.columns else 0
+        first_ms = grp["recv_time_ms"].min()
+        last_ms = grp["recv_time_ms"].max()
+        client_dur_s = max(1e-6, (last_ms - first_ms) / 1000.0)
+        expected_client_snaps = int(round(client_dur_s * TICK_HZ))
+        # prefer using client-reported lost snapshots if nonzero, otherwise infer from expected - received
+        lost_snaps = lost_reported if lost_reported > 0 else max(0, expected_client_snaps - rec_snaps)
+        update_rate_client = rec_snaps / client_dur_s if client_dur_s > 0 else np.nan
+        loss_rate_client = lost_snaps / (rec_snaps + lost_snaps) if (rec_snaps + lost_snaps) > 0 else 0.0
 
-    # Merge
-    merged = pd.merge(
-        clients,
-        server,
-        on=["snapshot_id", "player_id"],
-        how="inner",
-    )
+        per_client_rows.append({
+            "client_id": cid,
+            "received_snapshots": rec_snaps,
+            "lost_snapshots": lost_snaps,
+            "expected_snapshots": rec_snaps + lost_snaps,
+            "update_rate": update_rate_client,
+            "loss_rate": loss_rate_client,
+            "client_duration_s": client_dur_s
+        })
+
+    pc_df = pd.DataFrame(per_client_rows)
+
+    # Merge client per-snapshot metrics with server rows where possible
+    merged = pd.merge(clients, server, on=["snapshot_id", "player_id"], how="inner")
 
     if merged.empty:
         print("[warn] merged dataset empty, creating empty output files.")
@@ -116,70 +92,46 @@ def main():
         return
 
     # Latency
-    merged["latency_ms"] = (
-        merged["recv_time_ms"].astype(float) - merged["server_timestamp_ms"].astype(float)
-    )
+    merged["latency_ms"] = merged["recv_time_ms"].astype(float) - merged["server_timestamp_ms"].astype(float)
 
-    # Perceived Error
-    merged["perceived_position_error"] = np.sqrt(
-        (merged["server_x"] - merged["client_x"]) ** 2
-        + (merged["server_y"] - merged["client_y"]) ** 2
-    )
+    # Perceived Position Error
+    merged["perceived_position_error"] = np.sqrt((merged["server_x"] - merged["client_x"])**2 + (merged["server_y"] - merged["client_y"])**2)
 
-    # Interpolated server metrics
+    # Interpolate server metrics
     query_ts = merged["server_timestamp_ms"].astype(float).to_numpy()
     cpu_interp, bw_interp = interp_server_metrics(serv_metrics, query_ts)
     merged["cpu_percent"] = cpu_interp
     merged["bandwidth_per_client_kbps"] = bw_interp
 
-    # Compute jitter per player
+    # Jitter per player (RFC1889)
     merged = merged.sort_values(["player_id", "recv_time_ms"])
     merged["jitter_ms"] = np.nan
     for pid, idxs in merged.groupby("player_id").groups.items():
         grp = merged.loc[idxs].sort_values("recv_time_ms")
         merged.loc[grp.index, "jitter_ms"] = compute_rfc1889_jitter(grp)
 
-    # --------------------------------------------------------
-    # NEW: Compute update_rate and loss_rate
-    # --------------------------------------------------------
-    # Received snapshots
-    received_snaps = merged["snapshot_id"].nunique()
+    # Attach per-client stats back to merged (each row carries client-level update/loss)
+    merged = merged.merge(pc_df.rename(columns={"client_id": "player_id"}), on="player_id", how="left")
 
-    # Expected snapshots: deduce from server log
-    duration_ms = (
-        server["server_timestamp_ms"].max() - server["server_timestamp_ms"].min()
-    )
-    duration_s = duration_ms / 1000.0
-    expected_snaps = duration_s * 20  # TICK_HZ = 20
-
-    loss_rate = max(0.0, (expected_snaps - received_snaps) / expected_snaps)
-    update_rate = received_snaps / duration_s if duration_s > 0 else np.nan
-
-    # --------------------------------------------------------
-    # Save per‑snapshot metrics
-    # --------------------------------------------------------
+    # Save per-snapshot metrics.csv
     os.makedirs(os.path.dirname(args.out) or ".", exist_ok=True)
     merged.to_csv(args.out, index=False)
 
-    # --------------------------------------------------------
-    # Save scenario statistics
-    # --------------------------------------------------------
-    stats = {
-        "mean_latency": merged["latency_ms"].mean(),
-        "mean_jitter": merged["jitter_ms"].mean(),
-        "mean_error": merged["perceived_position_error"].mean(),
-        "update_rate": update_rate,
-        "loss_rate": loss_rate,
-        "duration_s": duration_s,
-        "snapshots_received": received_snaps,
-        "snapshots_expected": expected_snaps,
+    # Save statistics.csv: record per-client rows + scenario summary
+    scenario_summary = {
+        "clients": len(pc_df),
+        "update_rate_mean": pc_df["update_rate"].mean() if not pc_df.empty else np.nan,
+        "loss_rate_mean": pc_df["loss_rate"].mean() if not pc_df.empty else np.nan,
+        "total_received_snapshots": int(clients["snapshot_id"].nunique()),
+        "total_lost_snapshots": int(pc_df["lost_snapshots"].sum()) if not pc_df.empty else 0
     }
 
     stats_path = os.path.join(os.path.dirname(args.out), "statistics.csv")
-    pd.DataFrame([stats]).to_csv(stats_path, index=False)
+    # write per-client stats and scenario_summary as two CSVs: clients_stats.csv and statistics_summary.csv
+    pc_df.to_csv(os.path.join(os.path.dirname(args.out), "clients_stats.csv"), index=False)
+    pd.DataFrame([scenario_summary]).to_csv(stats_path, index=False)
 
-    print(f"[done] Saved {args.out} and statistics.csv")
-
+    print(f"[done] Saved {args.out}, clients_stats.csv, and statistics.csv")
 
 if __name__ == "__main__":
     main()
