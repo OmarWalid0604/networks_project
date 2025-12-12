@@ -1,52 +1,38 @@
 import pandas as pd
-import matplotlib.pyplot as plt
-import numpy as np
+import argparse
 import os
+import matplotlib.pyplot as plt
 
-def plot_metric(metric_name, df, outdir="plots"):
+def plot_metric(df, metric, outdir):
     os.makedirs(outdir, exist_ok=True)
 
-    # Extract needed columns
-    metric = df[metric_name].to_numpy(dtype=float)
-    update_rates = df["update_rate"].to_numpy(dtype=float)
-    loss_rates = df["loss_rate"].to_numpy(dtype=float)
-
-    # ==========================
-    # Plot metric vs update rate
-    # ==========================
-    plt.figure(figsize=(8,5))
-    plt.plot(update_rates, metric, marker='o')
-    plt.title(f"{metric_name} vs Update Rate")
-    plt.xlabel("Update Rate (Hz)")
-    plt.ylabel(metric_name)
-    plt.grid(True)
-    plt.savefig(f"{outdir}/{metric_name}_vs_update_rate.png")
+    # Plot vs update rate (snapshot_id)
+    plt.figure()
+    df.plot(x="snapshot_id", y=metric)
+    plt.title(f"{metric} vs Update Rate")
+    plt.savefig(os.path.join(outdir, f"{metric}_vs_update_rate.png"))
     plt.close()
 
-    # ==========================
-    # Plot metric vs loss rate
-    # ==========================
-    plt.figure(figsize=(8,5))
-    plt.plot(loss_rates, metric, marker='o', color='red')
-    plt.title(f"{metric_name} vs Loss Rate")
-    plt.xlabel("Packet Loss Rate (%)")
-    plt.ylabel(metric_name)
-    plt.grid(True)
-    plt.savefig(f"{outdir}/{metric_name}_vs_loss_rate.png")
-    plt.close()
+    # Plot vs loss rate (latency/jitter/error grouped by scenario loss)
+    if "loss_rate" in df.columns:
+        plt.figure()
+        df.plot(x="loss_rate", y=metric)
+        plt.title(f"{metric} vs Loss Rate")
+        plt.savefig(os.path.join(outdir, f"{metric}_vs_loss_rate.png"))
+        plt.close()
 
 def main():
-    df = pd.read_csv("metrics.csv")
+    p = argparse.ArgumentParser()
+    p.add_argument("--in", required=True, help="Path to metrics.csv")
+    p.add_argument("--out", required=True, help="Directory to save plots")
+    args = p.parse_args()
 
-    # You must add these parameters manually to the metrics file OR
-    # compute_metrics should add them for each scenario run
-    # For now we assume present:
-    # update_rate, loss_rate columns
+    df = pd.read_csv(args.in)
 
-    for metric in ["latency_ms", "jitter_ms", "perceived_position_error"]:
-        plot_metric(metric, df)
-
-    print("All graphs generated in /plots folder.")
+    metrics = ["latency_ms", "jitter_ms", "perceived_position_error"]
+    for m in metrics:
+        if m in df.columns:
+            plot_metric(df, m, args.out)
 
 if __name__ == "__main__":
     main()
