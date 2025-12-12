@@ -49,7 +49,7 @@ run_scenario() {
     rm -f server_positions.csv server_metrics.csv client_positions_*.csv client_positions.csv
 
     # start server
-    python3 server.py > "$OUT_DIR/server_output.txt" 2>&1 &
+    ( cd "$(pwd)" && python3 server.py ) > "$outdir/server_output.txt" 2>&1 &
     SERVER_PID=$!
     sleep 1
     echo "[server] pid=$SERVER_PID"
