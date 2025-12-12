@@ -50,8 +50,7 @@ run_scenario() {
     # Start server in background
     ( cd "$(pwd)" && python3 server.py ) > "$outdir/server_output.txt" 2>&1 &
     SERVER_PID=$!
-    # ensure correct compute_metrics.py is used
-    cp compute_metrics.py "$outdir/" || true
+
     sleep 1
     echo "[server] pid=$SERVER_PID"
 
