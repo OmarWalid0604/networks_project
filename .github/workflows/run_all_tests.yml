@@ -28,21 +28,6 @@ jobs:
       - name: Run Phase 2 tests
         run: sudo ./run_all_tests.sh
 
-      - name: Generate plots for all scenarios
-        run: |
-          for scenario in results_phase2/*; do
-            metrics_file="$scenario/metrics.csv"
-            plots_dir="$scenario/plots"
-
-            if [[ -f "$metrics_file" ]]; then
-              echo "Plotting for $scenario"
-              sudo mkdir -p "$plots_dir"
-              sudo python3 plot_results.py --in "$metrics_file" --out "$plots_dir"
-            else
-              echo "[skip] No metrics.csv in $scenario"
-            fi
-          done
-
       - name: Upload results artifacts
         uses: actions/upload-artifact@v4
         with:
