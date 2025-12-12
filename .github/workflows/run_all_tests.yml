@@ -1,0 +1,41 @@
+name: Phase 2 Test Runner
+
+on:
+  push:
+    branches: [ main ]
+  workflow_dispatch:
+
+jobs:
+  phase2:
+    runs-on: ubuntu-latest
+
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install system packages
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y python3 python3-pip tcpdump tshark iproute2
+
+      - name: Install Python dependencies (if any)
+        run: |
+         python3 -m pip install --upgrade pip setuptools wheel
+         sudo python3 -m pip install pandas  numpy
+
+      - name: Make runner executable
+        run: |
+          chmod +x run_all_tests.sh
+
+      - name: Run Phase 2 tests (needs sudo for tc/tcpdump)
+        run: |
+          sudo ./run_all_tests.sh
+    
+      - name: Upload results artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: results_phase2
+          path: results_phase2/
