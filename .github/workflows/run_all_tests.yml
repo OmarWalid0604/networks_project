@@ -34,7 +34,7 @@ jobs:
         run: |
           for scenario in results_phase2/*; do
             if [[ -d "$scenario" && -f "$scenario/metrics.csv" ]]; then
-              python3 plot_metrics.py --metrics "$scenario/metrics.csv" --outdir "$scenario"
+              python3 plot_results.py --metrics "$scenario/metrics.csv" --outdir "$scenario"
             fi
           done
 
