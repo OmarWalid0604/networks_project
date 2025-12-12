@@ -91,7 +91,7 @@ run_scenario() {
 
     # Compute metrics
     if [[ -f "$outdir/server_positions.csv" && -s "$combined" && -f "$outdir/server_metrics.csv" ]]; then
-        $PYTHON compute_metrics.py --server \
+        $PYTHON "$(pwd)compute_metrics.py" --server \
             --server "$outdir/server_positions.csv" \
             --clients "$combined" \
             --server_metrics "$outdir/server_metrics.csv" \
