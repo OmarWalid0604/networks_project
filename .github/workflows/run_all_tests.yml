@@ -33,9 +33,8 @@ jobs:
       - name: Generate plots
         run: |
           for scenario in results_phase2/*; do
-            if [[ -d "$scenario" && -f "$scenario/metrics.csv" ]]; then
-              python3 plot_results.py --metrics "$scenario/metrics.csv" --outdir "$scenario"
-            fi
+           echo "Plotting for $scenario"
+           ( cd "$scenario" && python3 ../../plot_results.py )
           done
 
       - name: Upload results artifact
