@@ -9,7 +9,6 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: write
-
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -19,11 +18,10 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y python3 python3-pip tcpdump tshark iproute2
 
-      - name: Install Python dependencies (GLOBAL for sudo)
+      - name: Install Python dependencies
         run: |
-          python3 -m pip install --upgrade --user pip
-          python3 -m pip install --user pandas numpy matplotlib
-          
+          sudo pip3 install pandas numpy matplotlib --break-system-packages
+
       - name: Make runner executable
         run: chmod +x run_all_tests.sh
 
