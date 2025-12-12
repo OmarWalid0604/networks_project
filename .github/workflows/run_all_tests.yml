@@ -21,9 +21,9 @@ jobs:
 
       - name: Install Python dependencies (GLOBAL for sudo)
         run: |
-          sudo python3 -m pip install --upgrade pip setuptools wheel
-          sudo python3 -m pip install pandas numpy matplotlib
-
+          python3 -m pip install --upgrade --user pip
+          python3 -m pip install --user pandas numpy matplotlib
+          
       - name: Make runner executable
         run: chmod +x run_all_tests.sh
 
