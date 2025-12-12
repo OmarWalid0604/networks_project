@@ -81,7 +81,7 @@ run_scenario() {
 
     # Combine clients logs
     combined="$outdir/client_positions.csv"
-    echo "timestamp_ms,snapshot_id,seq_num,player_id,displayed_x,displayed_y" > "$combined"
+    echo "timestamp_ms,snapshot_id,seq_num,player_id,displayed_x,displayed_y,lost_snapshots_total" > "$combined"
     for i in $(seq 1 $CLIENTS); do
         C_DIR="$outdir/client_$i"
         for f in "$C_DIR"/client_positions_*.csv; do
