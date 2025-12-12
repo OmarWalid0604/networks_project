@@ -51,7 +51,7 @@ def pack_header(msg_type, snapshot_id, seq_num, ts, payload):
 # ======================================================
 metrics_file = open("server_metrics.csv", "w", newline="")
 metrics_writer = csv.writer(metrics_file)
-metrics_writer.writerow(["timestamp_ms","cpu_percent", "bandwidth_per_client_kbps"])
+metrics_writer.writerow(["timestamp_ms","cpu_percent", "bandwidth_kbps"])
 metrics_file.flush()
 
 server_pos_file = open("server_positions.csv", "w", newline="")
