@@ -19,10 +19,10 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y python3 python3-pip tcpdump tshark iproute2
 
-      - name: Install Python dependencies (if any)
+      - name: Install Python dependencies (GLOBAL for sudo)
         run: |
-          python3 -m pip install --upgrade pip setuptools wheel
-          python3 -m pip install pandas numpy matplotlib 
+          sudo python3 -m pip install --upgrade pip setuptools wheel
+          sudo python3 -m pip install pandas numpy matplotlib
 
       - name: Make runner executable
         run: chmod +x run_all_tests.sh
