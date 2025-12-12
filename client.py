@@ -6,12 +6,13 @@ import socket, struct, time, csv, os
 # ======================================================
 MAGIC = b"GCL1"; VERSION = 1
 MT_INIT, MT_SNAPSHOT, MT_EVENT, MT_ACK, MT_HEARTBEAT = range(5)
-
 HDR_FMT = ">4sBBIIQH"
 HDR_LEN = struct.calcsize(HDR_FMT)
-
 SERVER_ADDR = ("127.0.0.1", 7777)
-RUN_SECONDS = 10
+
+# Use env DURATION if provided; fallback to 10 for local runs
+RUN_SECONDS = int(os.environ.get("DURATION", os.environ.get("RUN_SECONDS", "10")))
+
 SMOOTH = 0.35
 EVENT_RTO_MS = 120
 MAX_EVENT_RETRIES = 4
@@ -38,15 +39,11 @@ def smooth_pos(old, new):
 def main(client_name="player1"):
     sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
     sock.settimeout(0.1)
-
     seq_out = 1
     last_recv = None
-
-    expected_snapshot = 1
-    lost_snapshots = 0
-
+    expected_snapshot = None   # will initialize on first snapshot
+    lost_snapshots_total = 0
     client_id = None
-    players_raw = {}
     players_smooth = {}
 
     # CSV file handles will be opened after we know client_id
@@ -69,7 +66,6 @@ def main(client_name="player1"):
             sock.sendto(pkt, SERVER_ADDR)
             seq_out += 1
             continue
-
         if len(data) < HDR_LEN:
             continue
         magic, ver, mtype, snap, seq, ser_ms, plen = struct.unpack(HDR_FMT, data[:HDR_LEN])
@@ -80,7 +76,6 @@ def main(client_name="player1"):
             continue
         cid, x, y = struct.unpack(">BBB", payload)
         client_id = int(cid)
-        players_raw[client_id] = (float(x), float(y))
         players_smooth[client_id] = (float(x), float(y))
         print(f"Connected as client {client_id} at ({x},{y})")
 
@@ -91,8 +86,8 @@ def main(client_name="player1"):
             os.remove(pos_fname)
         pos_f = open(pos_fname, "w", newline="")
         pos_w = csv.writer(pos_f)
-        # header includes seq_num (sequence number from packet header)
-        pos_w.writerow(["timestamp_ms", "snapshot_id", "seq_num", "player_id", "displayed_x", "displayed_y"])
+        # header includes lost_snapshots_total
+        pos_w.writerow(["timestamp_ms", "snapshot_id", "seq_num", "player_id", "displayed_x", "displayed_y", "lost_snapshots_total"])
         pos_f.flush()
 
     # Event RDT placeholders (unchanged behavior)
@@ -113,9 +108,11 @@ def main(client_name="player1"):
     start = time.time()
     last_applied = 0
 
+    print(f"[CLIENT] Starting main loop, RUN_SECONDS={RUN_SECONDS}")
+
+    # loop until duration expires (runner kills remaining processes)
     while time.time() - start < RUN_SECONDS:
         now_ms = monotonic_ms()
-
         try:
             data, _ = sock.recvfrom(4096)
             recv_ms = monotonic_ms()
@@ -127,22 +124,24 @@ def main(client_name="player1"):
             payload = data[HDR_LEN:HDR_LEN+plen]
 
             if mtype == MT_SNAPSHOT:
-                # packet loss estimation
+                # initialize expected_snapshot on first snapshot
+                if expected_snapshot is None:
+                    expected_snapshot = snap
+                # packet loss estimation (count gaps)
                 if snap > expected_snapshot:
                     lost_here = snap - expected_snapshot
-                    lost_snapshots += lost_here
-                    print(f"[LOSS] {lost_here} snapshots lost before {snap} (total={lost_snapshots})")
+                    lost_snapshots_total += lost_here
+                    # don't crash if lots lost; just accumulate
                 expected_snapshot = snap + 1
 
+                # ignore snapshots already applied (dedup)
                 if snap <= last_applied:
                     continue
 
                 if plen < 2:
                     continue
-
                 (num_players,) = struct.unpack_from(">H", payload, 0)
                 offset = 2
-
                 new_positions = {}
                 for _ in range(num_players):
                     if offset + 3 > len(payload):
@@ -158,18 +157,15 @@ def main(client_name="player1"):
 
                 # apply smoothing only to players present in this snapshot
                 for pid, pos in new_positions.items():
-                    players_raw[pid] = pos
                     old_pos = players_smooth.get(pid)
                     players_smooth[pid] = smooth_pos(old_pos, pos)
 
                 # write displayed positions for all currently known players (only those we have smooth for)
                 for pid, (sx, sy) in players_smooth.items():
-                    # write the seq from header (seq)
-                    pos_w.writerow([int(recv_ms), int(snap), int(seq), int(pid), float(sx), float(sy)])
+                    pos_w.writerow([int(recv_ms), int(snap), int(seq), int(pid), float(sx), float(sy), int(lost_snapshots_total)])
                 pos_f.flush()
-
                 last_applied = snap
-                print(f"[SNAP {snap}] latency={latency}, jitter={jitter}, lost_total={lost_snapshots}")
+                print(f"[SNAP {snap}] latency={latency}, jitter={jitter}, lost_total={lost_snapshots_total}")
 
             elif mtype == MT_ACK and plen >= 4:
                 (ack_seq,) = struct.unpack(">I", payload[:4])
