@@ -50,6 +50,8 @@ run_scenario() {
     # Start server in background
     ( cd "$(pwd)" && python3 server.py ) > "$outdir/server_output.txt" 2>&1 &
     SERVER_PID=$!
+    # ensure correct compute_metrics.py is used
+    cp compute_metrics.py "$outdir/" || true
     sleep 1
     echo "[server] pid=$SERVER_PID"
 
@@ -89,7 +91,7 @@ run_scenario() {
 
     # Compute metrics
     if [[ -f "$outdir/server_positions.csv" && -s "$combined" && -f "$outdir/server_metrics.csv" ]]; then
-        $PYTHON compute_metrics.py \
+        $PYTHON "$outdir/compute_metrics.py" \
             --server "$outdir/server_positions.csv" \
             --clients "$combined" \
             --server_metrics "$outdir/server_metrics.csv" \
