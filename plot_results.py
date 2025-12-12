@@ -22,12 +22,14 @@ def plot_metric(df, metric, outdir):
         plt.close()
 
 def main():
-    p = argparse.ArgumentParser()
-    p.add_argument("--in", required=True, help="Path to metrics.csv")
-    p.add_argument("--out", required=True, help="Directory to save plots")
-    args = p.parse_args()
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--input", required=True, help="metrics.csv path")
+    parser.add_argument("--out", required=True, help="output plot folder")
+    args = parser.parse_args()
 
-    df = pd.read_csv(args.in)
+    os.makedirs(args.out, exist_ok=True)
+
+    df = pd.read_csv(args.input)
 
     metrics = ["latency_ms", "jitter_ms", "perceived_position_error"]
     for m in metrics:
