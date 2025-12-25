@@ -122,6 +122,9 @@ def main():
         "clients": len(pc_df),
         "update_rate_mean": pc_df["update_rate"].mean() if not pc_df.empty else np.nan,
         "loss_rate_mean": pc_df["loss_rate"].mean() if not pc_df.empty else np.nan,
+        "mean_position_error": mean_position_error,
+        "mean_latency_ms": mean_latency_ms,
+        "mean_jitter_ms": mean_jitter_ms,
         "total_received_snapshots": int(clients["snapshot_id"].nunique()),
         "total_lost_snapshots": int(pc_df["lost_snapshots"].sum()) if not pc_df.empty else 0
     }
