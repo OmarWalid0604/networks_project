@@ -1,10 +1,7 @@
-#!/usr/bin/env python3
 import argparse
 import os
 import numpy as np
 import pandas as pd
-
-TICK_HZ = 20.0
 
 def interp_server_metrics(serv_metrics, query_ts):
     if serv_metrics.empty:
@@ -63,9 +60,9 @@ def main():
         first_ms = grp["recv_time_ms"].min()
         last_ms = grp["recv_time_ms"].max()
         client_dur_s = max(1e-6, (last_ms - first_ms) / 1000.0)
-        expected_client_snaps = int(round(client_dur_s * TICK_HZ))
-        # prefer using client-reported lost snapshots if nonzero, otherwise infer from expected - received
-        lost_snaps = lost_reported if lost_reported > 0 else max(0, expected_client_snaps - rec_snaps)
+        # authoritative loss from client snapshot ID gaps
+        lost_snaps = lost_reported
+        expected_client_snaps = rec_snaps + lost_snaps
         update_rate_client = rec_snaps / client_dur_s if client_dur_s > 0 else np.nan
         loss_rate_client = lost_snaps / (rec_snaps + lost_snaps) if (rec_snaps + lost_snaps) > 0 else 0.0
 
