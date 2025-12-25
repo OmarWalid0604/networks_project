@@ -115,19 +115,43 @@ def main():
     merged.to_csv(args.out, index=False)
 
     # Save statistics.csv: record per-client rows + scenario summary
+    # Median values
+    median_position_error = merged["perceived_position_error"].median()
+    median_latency_ms = merged["latency_ms"].median()
+    median_jitter_ms = merged["jitter_ms"].median()
+
+    # 95th percentile values
+    p95_position_error = merged["perceived_position_error"].quantile(0.95)
+    p95_latency_ms = merged["latency_ms"].quantile(0.95)
+    p95_jitter_ms = merged["jitter_ms"].quantile(0.95)
+
+    # mean values
     mean_position_error = merged["perceived_position_error"].mean()
     mean_latency_ms = merged["latency_ms"].mean()
     mean_jitter_ms = merged["jitter_ms"].mean()
     scenario_summary = {
-        "clients": len(pc_df),
-        "update_rate_mean": pc_df["update_rate"].mean() if not pc_df.empty else np.nan,
-        "loss_rate_mean": pc_df["loss_rate"].mean() if not pc_df.empty else np.nan,
-        "mean_position_error": mean_position_error,
-        "mean_latency_ms": mean_latency_ms,
-        "mean_jitter_ms": mean_jitter_ms,
-        "total_received_snapshots": int(clients["snapshot_id"].nunique()),
-        "total_lost_snapshots": int(pc_df["lost_snapshots"].sum()) if not pc_df.empty else 0
-    }
+    "clients": int(len(pc_df)),
+    "update_rate_mean": float(pc_df["update_rate"].mean()) if not pc_df.empty else np.nan,
+    "loss_rate_mean": float(pc_df["loss_rate"].mean()) if not pc_df.empty else np.nan,
+
+    # Position error stats
+    "mean_position_error": float(mean_position_error),
+    "median_position_error": float(median_position_error),
+    "p95_position_error": float(p95_position_error),
+
+    # Latency stats
+    "mean_latency_ms": float(mean_latency_ms),
+    "median_latency_ms": float(median_latency_ms),
+    "p95_latency_ms": float(p95_latency_ms),
+
+    # Jitter stats
+    "mean_jitter_ms": float(mean_jitter_ms),
+    "median_jitter_ms": float(median_jitter_ms),
+    "p95_jitter_ms": float(p95_jitter_ms),
+
+    "total_received_snapshots": int(clients["snapshot_id"].nunique()),
+    "total_lost_snapshots": int(pc_df["lost_snapshots"].sum()) if not pc_df.empty else 0
+}
 
     stats_path = os.path.join(os.path.dirname(args.out), "statistics.csv")
     # write per-client stats and scenario_summary as two CSVs: clients_stats.csv and statistics_summary.csv
