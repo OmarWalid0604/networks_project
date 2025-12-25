@@ -11,7 +11,7 @@ HDR_LEN = struct.calcsize(HDR_FMT)
 
 SERVER_ADDR = ("127.0.0.1", 7777)
 PAYLOAD_LIMIT = 1200
-TICK_HZ = 20
+TICK_HZ = 10
 MAX_CLIENTS = 4
 
 # ======================================================
