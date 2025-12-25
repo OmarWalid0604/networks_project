@@ -115,6 +115,9 @@ def main():
     merged.to_csv(args.out, index=False)
 
     # Save statistics.csv: record per-client rows + scenario summary
+    mean_position_error = merged["perceived_position_error"].mean()
+    mean_latency_ms = merged["latency_ms"].mean()
+    mean_jitter_ms = merged["jitter_ms"].mean()
     scenario_summary = {
         "clients": len(pc_df),
         "update_rate_mean": pc_df["update_rate"].mean() if not pc_df.empty else np.nan,
