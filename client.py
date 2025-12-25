@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 import socket, struct, time, csv, os
 
 # ======================================================
@@ -43,6 +42,7 @@ def main(client_name="player1"):
     last_recv = None
     expected_snapshot = None   # will initialize on first snapshot
     lost_snapshots_total = 0
+    received_snapshots = 0
     client_id = None
     players_smooth = {}
 
@@ -133,6 +133,7 @@ def main(client_name="player1"):
                     lost_snapshots_total += lost_here
                     # don't crash if lots lost; just accumulate
                 expected_snapshot = snap + 1
+                received_snapshots += 1
 
                 # ignore snapshots already applied (dedup)
                 if snap <= last_applied:
